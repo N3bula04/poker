@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0B1F19" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Chipless — poker without chips</title>
+<style>
+  :root{
+    --felt:#0B1F19; --felt2:#10291F; --panel:#143128; --rail:#1F4638;
+    --bone:#F1EBDD; --muted:#8CA79A; --dim:#5E7D70;
+    --brass:#D9A441; --brass-ink:#2A1E05;
+    --red:#C4453C; --blue:#5B8FC7; --win:#59C08A;
+    --r:14px;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{touch-action:manipulation;-webkit-text-size-adjust:100%}
+  button{user-select:none;-webkit-user-select:none}
+  html,body{margin:0}
+  body{
+    font-family:var(--ui); background:var(--felt); color:var(--bone);
+    background-image:radial-gradient(120% 70% at 50% -10%, #17392C 0%, var(--felt) 60%);
+    background-attachment:fixed;
+    padding-bottom:calc(210px + env(safe-area-inset-bottom));
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:14px 14px 0}
+
+  /* --- header --- */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .brand{font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .brand b{color:var(--brass)}
+  .iconbtn{background:transparent;border:1px solid var(--rail);color:var(--muted);border-radius:10px;
+    padding:8px 12px;font:600 13px var(--ui);cursor:pointer}
+  .iconbtn:hover{color:var(--bone);border-color:var(--dim)}
+
+  /* --- pot hero --- */
+  .hero{background:linear-gradient(180deg,var(--felt2),rgba(16,41,31,.35));
+    border:1px solid var(--rail);border-radius:20px;padding:18px 16px 14px;text-align:center;position:relative;overflow:hidden}
+  .streets{display:flex;justify-content:center;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .st{font:700 10px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+    padding:5px 10px;border-radius:999px;border:1px solid transparent}
+  .st.done{color:var(--muted)}
+  .st.now{color:var(--brass);border-color:var(--brass);background:rgba(217,164,65,.09)}
+  .potlabel{font:700 10px var(--ui);letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+  .potval{font:800 clamp(40px,13vw,60px)/1 var(--mono);font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em;margin:6px 0 4px;color:var(--bone)}
+  .potsub{font:600 12px var(--mono);color:var(--dim);min-height:16px}
+  .heroline{display:flex;justify-content:center;gap:14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--rail);
+    font:600 11px var(--ui);color:var(--muted);flex-wrap:wrap}
+  .heroline b{color:var(--bone);font-family:var(--mono);font-weight:700}
+
+  /* --- seats --- */
+  .seats{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:14px}
+  .seat{background:var(--felt2);border:1px solid var(--rail);border-radius:var(--r);padding:12px;position:relative;transition:.18s}
+  .seat.turn{border-color:var(--brass);background:linear-gradient(180deg,#1B3A2C,var(--felt2));
+    animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(217,164,65,.12)}50%{box-shadow:0 0 0 6px rgba(217,164,65,.28)}}
+  .sstack{font-size:clamp(19px,2.4vw,26px)}
+  .seat.folded{opacity:.4}
+  .seat.out{opacity:.3}
+  .seat.won{border-color:var(--win);box-shadow:0 0 0 3px rgba(89,192,138,.14)}
+  .srow{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .sname{font:700 16px var(--ui);background:transparent;border:0;color:var(--bone);padding:0;width:100%;min-width:0}
+  .sname:focus{outline:none;border-bottom:1px dashed var(--dim)}
+  .sstack{font:800 19px var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .bar{height:3px;background:rgba(255,255,255,.06);border-radius:2px;margin:9px 0 8px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--brass);border-radius:2px;transition:width .3s}
+  .sfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px}
+  .tags{display:flex;gap:4px;flex-wrap:wrap}
+  .tag{font:700 9px var(--ui);letter-spacing:.1em;text-transform:uppercase;padding:3px 6px;border-radius:5px;
+    background:rgba(255,255,255,.07);color:var(--muted)}
+  .tag.d{background:var(--bone);color:#123}
+  .tag.sb{background:var(--blue);color:#06121e}
+  .tag.bb{background:var(--brass);color:var(--brass-ink)}
+  .tag.ai{background:var(--red);color:#fff}
+  .tag.fd{background:transparent;border:1px solid var(--rail)}
+  .committed{font:700 12px var(--mono);color:var(--brass)}
+  .committed.zero{color:var(--dim)}
+  .addrow{display:flex;gap:6px;margin-top:9px}
+  .addrow input{flex:1;min-width:0;background:#0A1A15;border:1px solid var(--rail);border-radius:8px;
+    color:var(--bone);font:700 16px var(--mono);padding:10px}
+  .addrow button{border:1px solid var(--rail);background:var(--panel);color:var(--bone);
+    border-radius:8px;padding:8px 12px;font:700 12px var(--ui);cursor:pointer;white-space:nowrap}
+  .addlink{background:none;border:0;padding:8px 0 2px;margin-top:4px;cursor:pointer;
+    font:700 11px var(--ui);letter-spacing:.06em;color:var(--dim)}
+  .addlink:hover{color:var(--muted)}
+  .rejoin{margin-top:9px;font:600 12px var(--ui);color:var(--brass)}
+
+  /* --- dock --- */
+  .dock{position:fixed;left:0;right:0;bottom:0;z-index:20;
+    background:linear-gradient(180deg,rgba(11,31,25,.86),var(--felt) 42%);
+    backdrop-filter:blur(10px);border-top:1px solid var(--rail);
+    padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
+  .dock-in{max-width:960px;margin:0 auto}
+  .prompt{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  .who{font:800 clamp(20px,3.4vw,28px)/1.1 var(--ui)}
+  .need{font:700 clamp(14px,2.2vw,18px) var(--mono);color:var(--muted)}
+  .need b{color:var(--brass)}
+  .keys{display:flex;gap:10px;justify-content:center;margin-top:9px;flex-wrap:wrap}
+  .keys span{font:600 11px var(--mono);color:var(--dim)}
+  .keys kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 5px;margin-right:4px;
+    border:1px solid var(--rail);border-bottom-width:2px;border-radius:5px;background:var(--panel);
+    color:var(--muted);font:700 11px var(--mono)}
+  .btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  button.act{border:0;border-radius:12px;padding:16px 8px;min-height:58px;cursor:pointer;
+    font:800 15px var(--ui);letter-spacing:.01em;color:var(--bone);background:var(--panel);
+    border:1px solid var(--rail);line-height:1.15}
+  button.act small{display:block;font:700 11px var(--mono);opacity:.7;margin-top:3px}
+  button.act:active{transform:translateY(1px)}
+  button.act:disabled{opacity:.32;cursor:not-allowed}
+  .b-fold{background:rgba(196,69,60,.14);border-color:rgba(196,69,60,.5);color:#F0A9A4}
+  .b-call{background:rgba(91,143,199,.16);border-color:rgba(91,143,199,.5);color:#CFE1F3}
+  .b-raise{background:var(--brass);border-color:var(--brass);color:var(--brass-ink)}
+  .b-next{background:var(--bone);border-color:var(--bone);color:#0d211a}
+  .b-win{background:var(--win);border-color:var(--win);color:#042415}
+  .full{grid-column:1/-1}
+
+  .raiser{margin-top:10px;padding-top:10px;border-top:1px solid var(--rail);display:none}
+  .raiser.on{display:block}
+  .rtop{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .ramt{flex:1;background:#0A1A15;border:1px solid var(--rail);border-radius:10px;color:var(--bone);
+    font:800 20px var(--mono);font-variant-numeric:tabular-nums;padding:10px 12px;width:100%;text-align:center}
+  input[type=range]{width:100%;accent-color:var(--brass);margin:2px 0 10px}
+  .quick{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .quick button{background:var(--panel);border:1px solid var(--rail);color:var(--muted);border-radius:9px;
+    padding:11px 4px;min-height:48px;font:700 12px var(--ui);cursor:pointer}
+  .quick button:hover{color:var(--bone);border-color:var(--dim)}
+
+  /* --- award / winner picking --- */
+  .award{margin-top:10px;border-top:1px solid var(--rail);padding-top:10px}
+  .potpick{margin-bottom:10px}
+  .potpick h4{margin:0 0 7px;font:700 11px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .potpick h4 span{color:var(--brass);font-family:var(--mono)}
+  .picks{display:flex;gap:6px;flex-wrap:wrap}
+  .pick{background:var(--panel);border:1px solid var(--rail);color:var(--bone);border-radius:10px;
+    padding:13px 16px;min-height:48px;font:700 15px var(--ui);cursor:pointer}
+  .pick.sel{background:var(--win);border-color:var(--win);color:#042415}
+
+  /* --- sheet --- */
+  .scrim{position:fixed;inset:0;background:rgba(3,10,8,.66);z-index:30;display:none}
+  .scrim.on{display:block}
+  .sheet{position:fixed;z-index:31;left:0;right:0;bottom:0;max-height:86vh;overflow:auto;display:none;
+    background:var(--felt2);border-top:1px solid var(--rail);border-radius:20px 20px 0 0;
+    padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+  .sheet.on{display:block}
+  .sheet-in{max-width:960px;margin:0 auto}
+  .sheet h3{margin:0 0 2px;font-size:18px}
+  .sheet .lead{color:var(--muted);font-size:13px;margin:0 0 14px}
+  .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+  label{display:block;font:700 10px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  input.f{width:100%;background:#0A1A15;border:1px solid var(--rail);border-radius:10px;color:var(--bone);
+    font:700 16px var(--mono);padding:11px 12px}
+  .sheet hr{border:0;border-top:1px solid var(--rail);margin:16px 0}
+  .rowbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .rowbtns button{flex:1;min-width:130px;border:1px solid var(--rail);background:var(--panel);color:var(--bone);
+    border-radius:11px;padding:12px;font:700 14px var(--ui);cursor:pointer}
+  .rowbtns .go{background:var(--brass);border-color:var(--brass);color:var(--brass-ink)}
+  .rowbtns .dang{background:transparent;border-color:rgba(196,69,60,.5);color:#E79992}
+
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font:700 10px var(--ui);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:6px 0}
+  td{padding:8px 0;border-top:1px solid var(--rail);font-family:var(--mono);font-variant-numeric:tabular-nums}
+  td.n{text-align:right}
+  .pos{color:var(--win)} .neg{color:var(--red)}
+  .settle{margin-top:12px;font-size:14px}
+  .settle div{padding:8px 10px;background:var(--panel);border-radius:9px;margin-bottom:6px;font-family:var(--mono)}
+  .logline{padding:7px 0;border-top:1px solid var(--rail);color:var(--muted);font-size:13px}
+  .logline:first-child{color:var(--bone);border-top:0}
+  .banner{margin-top:14px;padding:14px;border-radius:var(--r);text-align:center;
+    background:rgba(89,192,138,.1);border:1px solid rgba(89,192,138,.4)}
+  .banner b{display:block;font-size:20px;margin-bottom:2px}
+  .banner span{color:var(--muted);font-size:13px}
+  .hidden{display:none!important}
+  @media (max-width:520px){ .quick{grid-template-columns:repeat(3,1fr)} }
+  @media (hover:none) and (pointer:coarse){ .keys{display:none} }
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><b>♠</b> Chipless</div>
+    <div style="display:flex;gap:6px">
+      <button class="iconbtn" onclick="undo()">Undo</button>
+      <button class="iconbtn" onclick="openSheet('ledger')">Ledger</button>
+      <button class="iconbtn" onclick="openSheet('setup')">Setup</button>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="streets" id="streets"></div>
+    <div class="potlabel">Pot</div>
+    <div class="potval" id="potval">0</div>
+    <div class="potsub" id="potsub"></div>
+    <div class="heroline">
+      <span>Hand <b id="handNo">1</b></span>
+      <span>Ante <b id="anteTxt">2</b></span>
+      <span>To call <b id="callTxt">0</b></span>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+  <div class="seats" id="seats"></div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="logline" id="lastlog" style="border:0"></div>
+  </div>
+</div>
+
+<!-- ACTION DOCK -->
+<div class="dock">
+  <div class="dock-in">
+    <div class="prompt">
+      <div class="who" id="who">—</div>
+      <div class="need" id="need"></div>
+    </div>
+    <div class="btns" id="btns"></div>
+
+    <div class="raiser" id="raiser">
+      <div class="rtop">
+        <input class="ramt" id="ramt" type="number" inputmode="numeric" oninput="syncSlider()">
+        <button class="act b-raise" style="padding:12px 18px" onclick="confirmRaise()">Confirm</button>
+      </div>
+      <input type="range" id="rslider" oninput="syncAmt()">
+      <div class="quick" id="quick"></div>
+    </div>
+
+    <div class="award hidden" id="award"></div>
+    <div class="keys" id="keys"></div>
+  </div>
+</div>
+
+<!-- SHEETS -->
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+
+<div class="sheet" id="sheet-setup">
+  <div class="sheet-in">
+    <h3>Table setup</h3>
+    <p class="lead">Blind changes apply from the next hand. Starting a new game clears everything.</p>
+    <div class="fields">
+      <div><label>Players</label><input class="f" id="f-count" type="number" min="2" max="10" value="4"></div>
+      <div><label>Starting stack</label><input class="f" id="f-stack" type="number" min="1" value="1000"></div>
+      <div><label>Ante per hand</label><input class="f" id="f-ante" type="number" min="0" value="2"></div>
+    </div>
+    <div class="rowbtns">
+      <button class="go" onclick="applyAnte()">Update ante</button>
+      <button onclick="doubleAnte()">Double ante</button>
+    </div>
+    <hr>
+    <div class="rowbtns">
+      <button onclick="addPlayer()">Add a player</button>
+      <button onclick="audit()">Audit chips</button>
+    </div>
+    <div class="rowbtns">
+      <button class="dang" onclick="newGame()">Start a new game</button>
+    </div>
+    <hr>
+    <h3 style="font-size:14px">Recent actions</h3>
+    <div id="logfull"></div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-ledger">
+  <div class="sheet-in">
+    <h3>Ledger</h3>
+    <p class="lead">Net position against total buy-ins. Settle up with the payments below.</p>
+    <table>
+      <thead><tr><th>Player</th><th class="n">Buy-in</th><th class="n">Stack</th><th class="n">Net</th></tr></thead>
+      <tbody id="ledgerBody"></tbody>
+    </table>
+    <div class="settle" id="settle"></div>
+    <hr>
+    <h3 style="font-size:14px">Add chips</h3>
+    <p class="lead">A rebuy is playable from the next hand.</p>
+    <div id="buyins"></div>
+  </div>
+</div>
+
+<script>
+/* ============================== STATE ============================== */
+const STREETS = ["Pre-flop","Flop","Turn","River","Showdown"];
+// phase: bet | street | award | handover | gameover
+let S = null, pendingAward = null, raiseOpen = false;
+
+const clone = o => JSON.parse(JSON.stringify(o));
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+
+function save(){ try{ localStorage.setItem('chipless', JSON.stringify(S)); }catch(e){} }
+function load(){ try{ const r=localStorage.getItem('chipless'); if(r){ S=JSON.parse(r); return true; } }catch(e){} return false; }
+function wipe(){ try{ localStorage.removeItem('chipless'); }catch(e){} }
+function snap(){ const h=S.history; S.history=[]; h.push(clone(S)); S.history=h; if(h.length>60) h.shift(); }
+function log(t){ S.log.unshift(t); if(S.log.length>60) S.log.pop(); }
+
+function newGame(){
+  const n = clamp(+$('f-count').value||4, 2, 10);
+  const stack = Math.max(1, +$('f-stack').value||1000);
+  const ante = Math.max(0, +$('f-ante').value||0);
+  S = { players: Array.from({length:n},(_,i)=>mkPlayer(`Player ${i+1}`, stack)),
+        pot:0, currentBet:0, lastFullRaise:minBet(ante), street:0, hand:1, dealer:0, turn:0,
+        ante, phase:'bet', history:[], log:[], lastWinners:[] };
+  newHand(true); closeSheet();
+}
+const minBet = a => Math.max(1, a??S.ante);
+function mkPlayer(name, stack){
+  return {name, stack, roundBet:0, totalBet:0, buyIn:stack, pending:0,
+          folded:false, out:stack<=0, acted:false, raiseLocked:false};
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ============================== SEATING ============================== */
+// A seat is "live" if it still has chips to play with.
+const isLive = p => !p.out && p.stack > 0;
+const liveCount = () => S.players.filter(isLive).length;
+function nextLive(from){
+  for(let k=1;k<=S.players.length;k++){ const i=(from+k)%S.players.length; if(isLive(S.players[i])) return i; }
+  return from;
+}
+// Someone who can still make a decision this hand (has chips, not folded, not all-in).
+const canAct = p => !p.folded && !p.out && p.stack > 0;
+function nextToAct(from){
+  for(let k=1;k<=S.players.length;k++){ const i=(from+k)%S.players.length; if(canAct(S.players[i])) return i; }
+  return -1;
+}
+const contenders = () => S.players.map((p,i)=>i).filter(i=>!S.players[i].folded && !S.players[i].out);
+
+/* ============================== HAND FLOW ============================== */
+function applyPending(){
+  S.players.forEach(p=>{
+    if(p.pending>0){ p.stack += p.pending; log(`${p.name} added ${p.pending} to their stack.`); p.pending=0; }
+  });
+}
+
+function newHand(first){
+  applyPending();
+  S.players.forEach(p=>{
+    p.roundBet=0; p.totalBet=0; p.folded=false; p.acted=false; p.raiseLocked=false;
+    p.out = p.stack<=0;
+  });
+  S.pot=0; S.currentBet=0; S.street=0; S.lastFullRaise=minBet(); S.lastWinners=[];
+
+  // BUG FIX 2: end the game instead of dealing to a table of one.
+  if(liveCount() < 2){ S.phase='gameover'; render(); save(); return; }
+
+  if(!first){ S.dealer = nextLive(S.dealer); }
+  else if(!isLive(S.players[S.dealer])){ S.dealer = nextLive(S.dealer); }
+
+  // Antes: everyone still in posts the same amount before the hand.
+  // It counts toward side pots (totalBet) but is not a bet — pre-flop starts at 0.
+  if(S.ante>0){
+    S.players.forEach(p=>{
+      if(isLive(p)){ const a=Math.min(S.ante,p.stack); p.stack-=a; p.totalBet+=a; S.pot+=a; }
+    });
+  }
+  S.currentBet = 0;
+
+  S.phase='bet';
+  const f = nextToAct(S.dealer);
+  S.turn = f === -1 ? S.dealer : f;
+  log(`Hand ${S.hand} — everyone antes ${S.ante}.`);
+  if(!settleIfNoAction()) { render(); }
+  save();
+}
+
+function commit(i, amt, markActed=true){
+  const p=S.players[i]; amt=clamp(amt,0,p.stack);
+  p.stack-=amt; p.roundBet+=amt; p.totalBet+=amt; S.pot+=amt;
+  if(markActed) p.acted=true;
+}
+
+function bettingComplete(){
+  return S.players.every(p => p.folded || p.out || p.stack===0 || (p.acted && p.roundBet===S.currentBet));
+}
+// If nobody left can voluntarily act (everyone all-in), skip straight to showdown.
+function settleIfNoAction(){
+  if(contenders().length===1){ return finishHand(); }
+  const actors = S.players.filter(canAct).length;
+  if(actors===0 || (actors===1 && bettingComplete())){
+    if(bettingComplete()){ S.street=4; S.phase='award'; render(); save(); return true; }
+  }
+  return false;
+}
+
+function act(type){
+  const i=S.turn, p=S.players[i];
+  if(S.phase!=='bet' || !canAct(p)) return;
+  const need = Math.max(0, S.currentBet - p.roundBet);
+  if(type==='check' && need>0) return;
+  snap();
+  if(type==='fold'){ p.folded=true; p.acted=true; log(`${p.name} folded.`); }
+  if(type==='check'){ p.acted=true; log(`${p.name} checked.`); }
+  if(type==='call'){
+    const paid=Math.min(need,p.stack); commit(i,paid);
+    log(`${p.name} called ${paid}${p.stack===0?' and is all in':''}.`);
+  }
+  closeRaiser(); after(i);
+}
+
+function raiseTo(target){
+  const i=S.turn, p=S.players[i];
+  if(S.phase!=='bet' || !canAct(p)) return;
+  const add = target - p.roundBet;
+  if(add<=0 || add>p.stack) return;
+  const allIn = add===p.stack;
+  const size = target - S.currentBet;
+  const min = minRaiseSize();
+  if(size < min && !allIn) return;
+  if(p.raiseLocked && !allIn) return;
+
+  snap();
+  const opening = S.currentBet===0;
+  commit(i, add);
+  S.currentBet = p.roundBet;
+  if(size >= min){
+    S.lastFullRaise = size;
+    S.players.forEach((q,j)=>{ if(j!==i && canAct(q)){ q.acted=false; q.raiseLocked=false; } });
+    log(`${p.name} ${opening?'bet':'raised to'} ${S.currentBet}${allIn?' — all in':''}.`);
+  } else {
+    // Short all-in: it does not reopen the betting for players who already acted.
+    S.players.forEach((q,j)=>{
+      if(j!==i && canAct(q) && q.roundBet < S.currentBet){ if(q.acted) q.raiseLocked=true; q.acted=false; }
+    });
+    log(`${p.name} is all in for ${S.currentBet} (under a full raise).`);
+  }
+  closeRaiser(); after(i);
+}
+const minRaiseSize = () => S.currentBet===0 ? minBet() : S.lastFullRaise;
+
+function after(i){
+  if(contenders().length===1){ finishHand(); return; }
+  if(bettingComplete()){
+    if(settleIfNoAction()) return;
+    S.phase = S.street>=3 ? 'award' : 'street';
+    if(S.phase==='award') S.street=4;
+    render(); save(); return;
+  }
+  const nxt = nextToAct(i);
+  S.turn = nxt===-1 ? i : nxt;
+  render(); save();
+}
+
+function nextStreet(){
+  if(S.phase!=='street') return;
+  snap();
+  S.street++;
+  S.currentBet=0; S.lastFullRaise=minBet();
+  S.players.forEach(p=>{ p.roundBet=0; p.acted=false; p.raiseLocked=false; });
+  S.phase='bet';
+  const f = nextToAct(S.dealer);
+  if(f===-1){ S.street=4; S.phase='award'; }   // everyone all in — run it out
+  else S.turn=f;
+  log(`— ${STREETS[S.street]} —`);
+  render(); save();
+}
+
+/* ============================== POTS ============================== */
+function sidePots(){
+  const levels=[...new Set(S.players.map(p=>p.totalBet).filter(x=>x>0))].sort((a,b)=>a-b);
+  const pots=[]; let prev=0;
+  for(const lv of levels){
+    const contrib = S.players.map((p,i)=>p.totalBet>=lv?i:-1).filter(i=>i>=0);
+    const amount = (lv-prev)*contrib.length;
+    const eligible = contrib.filter(i=>!S.players[i].folded);
+    if(amount>0) pots.push({amount, contrib, eligible, level:lv});
+    prev=lv;
+  }
+  return pots;
+}
+
+// BUG FIX 3: a layer with no live contender is dead money that was never called.
+// Refund it to whoever put it in instead of deadlocking the award.
+function refundUncontested(pots){
+  const live=[];
+  for(const pot of pots){
+    if(pot.eligible.length===0){
+      const share = pot.amount / pot.contrib.length;
+      pot.contrib.forEach(i=>{ S.players[i].stack += share; S.players[i].totalBet -= share; });
+      S.pot -= pot.amount;
+      log(`Uncalled ${pot.amount} returned.`);
+    } else live.push(pot);
+  }
+  return live;
+}
+
+function finishHand(){
+  // Everyone folded to one player: give them the pot, returning any uncalled bet.
+  const win = contenders()[0];
+  snap();
+  const pots = refundUncontested(sidePots());
+  const total = pots.reduce((s,p)=>s+p.amount,0);
+  S.players[win].stack += total;
+  S.pot = 0;
+  S.players.forEach(p=>p.totalBet=0);
+  S.lastWinners=[win];
+  log(`${S.players[win].name} won ${total} — everyone folded.`);
+  S.phase='handover'; render(); save(); return true;
+}
+
+function openAward(){
+  const pots = refundUncontested(sidePots());
+  pendingAward = pots.map(p=>({...p, picked:[]}));
+  if(!pendingAward.length){ S.pot=0; S.phase='handover'; render(); return; }
+  render();
+}
+function togglePick(pi, seat){
+  const p=pendingAward[pi];
+  p.picked = p.picked.includes(seat) ? p.picked.filter(x=>x!==seat) : [...p.picked, seat];
+  render();
+}
+function confirmAward(){
+  if(!pendingAward.every(p=>p.picked.length)) return;
+  snap();
+  const winners=new Set();
+  pendingAward.forEach((pot,n)=>{
+    const w=pot.picked;
+    const share=Math.floor(pot.amount/w.length);
+    let rem=pot.amount - share*w.length;
+    w.forEach(i=>{ S.players[i].stack+=share; winners.add(i); });
+    // Odd chips go to the first winner clockwise from the dealer.
+    const order=[]; for(let k=1;k<=S.players.length;k++){ const i=(S.dealer+k)%S.players.length; if(w.includes(i)) order.push(i); }
+    for(let r=0;r<rem;r++) S.players[order[r%order.length]].stack++;
+    log(`${w.map(i=>S.players[i].name).join(' & ')} won ${pot.amount}${n>0?` (side pot ${n})`:''}${w.length>1?', split':''}.`);
+  });
+  S.pot=0; S.players.forEach(p=>p.totalBet=0);
+  S.lastWinners=[...winners]; pendingAward=null;
+  S.phase='handover'; render(); save();
+}
+function dealNext(){ snap(); S.hand++; newHand(false); }
+
+/* ============================== MONEY ============================== */
+function addPlayer(){
+  snap();
+  const stack=Math.max(1,+$('f-stack').value||1000);
+  const p=mkPlayer(`Player ${S.players.length+1}`, 0);
+  p.buyIn=stack; p.pending=stack; p.out=true;
+  S.players.push(p);
+  log(`${p.name} joins for ${stack}, in from the next hand.`);
+  render(); save();
+}
+let openBuy=null;
+function focusSeatBuy(i){ requestAnimationFrame(()=>{ const a=$(`sbi-${i}`); if(a&&a.focus) a.focus(); }); }
+function addChips(i, amt){
+  if(!(amt>0)) return false;
+  snap();
+  const p=S.players[i];
+  p.buyIn+=amt; p.pending+=amt;
+  log(`${p.name} added ${amt} — playable next hand.`);
+  return true;
+}
+function seatBuy(i){
+  const inp=$(`sbi-${i}`); const amt=Math.floor(+inp.value);
+  if(!addChips(i,amt)) return;
+  openBuy=null; render(); save();
+}
+function rebuy(i){
+  const inp=$(`bi-${i}`); const amt=Math.floor(+inp.value);
+  if(!addChips(i,amt)) return;
+  inp.value=''; render(); save();
+}
+function applyAnte(){
+  snap();
+  S.ante=Math.max(0,+$('f-ante').value||0);
+  log(`Ante set to ${S.ante} from the next hand.`);
+  render(); save(); closeSheet();
+}
+function doubleAnte(){ $('f-ante').value=(S.ante||1)*2; applyAnte(); }
+
+function audit(){
+  const buyIns=S.players.reduce((s,p)=>s+p.buyIn,0);
+  const pending=S.players.reduce((s,p)=>s+p.pending,0);
+  const stacks=S.players.reduce((s,p)=>s+p.stack,0);
+  const expect=buyIns-pending, actual=stacks+S.pot;
+  const pots=sidePots().reduce((s,p)=>s+p.amount,0);
+  const ok = expect===actual && pots===S.pot;
+  log(`${ok?'Chips balance':'CHIPS DO NOT BALANCE'} — buy-ins ${buyIns}, in play ${actual}, pot ${S.pot}.`);
+  render(); save();
+}
+
+function settlement(){
+  const nets=S.players.map((p,i)=>({i, name:p.name, net:p.stack+p.pending-p.buyIn}));
+  const debt=nets.filter(x=>x.net<0).map(x=>({...x, v:-x.net})).sort((a,b)=>b.v-a.v);
+  const cred=nets.filter(x=>x.net>0).map(x=>({...x, v:x.net})).sort((a,b)=>b.v-a.v);
+  const pay=[]; let a=0,b=0;
+  while(a<debt.length && b<cred.length){
+    const amt=Math.min(debt[a].v, cred[b].v);
+    if(amt>0) pay.push(`${debt[a].name} pays ${cred[b].name} ${amt}`);
+    debt[a].v-=amt; cred[b].v-=amt;
+    if(debt[a].v===0) a++;
+    if(cred[b].v===0) b++;
+  }
+  return {nets, pay};
+}
+
+/* ============================== UNDO ============================== */
+function undo(){
+  if(!S.history.length) return;
+  const h=S.history; const prev=h.pop();
+  S=prev; S.history=h; pendingAward=null;
+  log('Undid the last action.');
+  render(); save();
+}
+
+/* ============================== RENDER ============================== */
+function render(){
+  const P=S.players;
+  // hero
+  $('streets').innerHTML = STREETS.map((s,i)=>
+    `<span class="st ${i===S.street?'now':(i<S.street?'done':'')}">${s}</span>`).join('');
+  $('potval').textContent = S.pot;
+  const pots = S.pot>0 ? sidePots() : [];
+  $('potsub').textContent = pots.length>1
+    ? pots.map((p,i)=> (i? `side ${p.amount}` : `main ${p.amount}`)).join('  ·  ') : '';
+  $('handNo').textContent = S.hand;
+  $('anteTxt').textContent = S.ante;
+  const me = P[S.turn];
+  $('callTxt').textContent = (S.phase==='bet' && me) ? Math.max(0, S.currentBet-me.roundBet) : 0;
+
+  // banner
+  const bn=$('banner');
+  if(S.phase==='gameover'){
+    const w=P.reduce((a,b)=>a.stack>b.stack?a:b);
+    bn.innerHTML=`<div class="banner"><b>${esc(w.name)} takes it all</b><span>Settle up in the ledger — or anyone can add chips on their seat to keep playing.</span></div>`;
+  } else bn.innerHTML='';
+
+  // seats
+  const big = Math.max(1, ...P.map(p=>p.stack));
+  $('seats').innerHTML = P.map((p,i)=>{
+    const tags=[];
+    if(i===S.dealer) tags.push('<span class="tag d">D</span>');
+    if(p.folded) tags.push('<span class="tag fd">Folded</span>');
+    else if(p.stack===0 && !p.out) tags.push('<span class="tag ai">All in</span>');
+    if(p.out && p.pending>0) tags.push(`<span class="tag">+${p.pending} next hand</span>`);
+    else if(p.out) tags.push('<span class="tag fd">Out</span>');
+    else if(p.pending>0) tags.push(`<span class="tag">+${p.pending} next hand</span>`);
+    const cls=[ 'seat',
+      (S.phase==='bet'&&i===S.turn)?'turn':'',
+      p.folded?'folded':'', p.out?'out':'',
+      S.lastWinners.includes(i)?'won':''].join(' ');
+    const busted = p.out || (p.stack===0 && p.folded) || (S.phase!=='bet' && p.stack===0 && S.pot===0);
+    const showAdd = openBuy===i || busted;
+    const addUI = showAdd
+      ? `${busted?`<div class="rejoin">Out of chips — add a rebuy to rejoin next hand</div>`:''}
+         <div class="addrow">
+           <input id="sbi-${i}" type="number" inputmode="numeric" min="1" placeholder="${busted?'rebuy amount':'amount'}"
+                  onkeydown="if(event.key==='Enter')seatBuy(${i})">
+           <button onclick="seatBuy(${i})">Add</button>
+           ${busted?'':`<button onclick="openBuy=null;render()">✕</button>`}
+         </div>`
+      : `<button class="addlink" onclick="openBuy=${i};render();focusSeatBuy(${i})">+ Add chips</button>`;
+    return `<div class="${cls}">
+      <div class="srow">
+        <input class="sname" value="${esc(p.name)}" onchange="S.players[${i}].name=this.value.trim()||'Seat ${i+1}';save();render()">
+        <div class="sstack">${p.stack}</div>
+      </div>
+      <div class="bar"><i style="width:${Math.round(p.stack/big*100)}%"></i></div>
+      <div class="sfoot">
+        <div class="tags">${tags.join('')}</div>
+        <div class="committed ${p.roundBet?'':'zero'}">${p.roundBet?('bet '+p.roundBet):'—'}</div>
+      </div>
+      ${addUI}
+    </div>`;
+  }).join('');
+
+  $('lastlog').textContent = S.log[0]||'';
+  $('logfull').innerHTML = S.log.map(l=>`<div class="logline">${esc(l)}</div>`).join('');
+
+  renderDock();
+  renderLedger();
+}
+
+function renderDock(){
+  const who=$('who'), need=$('need'), btns=$('btns'), award=$('award');
+  award.classList.add('hidden'); award.innerHTML='';
+  btns.classList.remove('hidden');
+
+  if(S.phase==='gameover'){
+    const rejoined = S.players.filter(p=>p.stack>0||p.pending>0).length>=2;
+    who.textContent = rejoined ? 'Ready to continue' : 'Game over';
+    need.textContent='';
+    btns.innerHTML = rejoined
+      ? `<button class="act b-next full" onclick="dealNext()">Deal hand ${S.hand+1}</button>`
+      : `<button class="act b-next full" onclick="openSheet('ledger')">Settle up</button>`;
+    renderKeys(); return;
+  }
+  if(S.phase==='street'){
+    who.textContent='Betting round complete';
+    need.textContent=`Pot ${S.pot}`;
+    btns.innerHTML=`<button class="act b-next full" onclick="nextStreet()">Deal the ${STREETS[S.street+1].toLowerCase()}</button>`;
+    return;
+  }
+  if(S.phase==='award'){
+    if(!pendingAward){
+      who.textContent='Showdown';
+      need.textContent=`Pot ${S.pot}`;
+      btns.innerHTML=`<button class="act b-win full" onclick="openAward()">Pick the winner</button>`;
+      return;
+    }
+    who.textContent='Who won?';
+    need.textContent='Tap two names to split.';
+    btns.classList.add('hidden');
+    award.classList.remove('hidden');
+    award.innerHTML = pendingAward.map((pot,pi)=>`
+      <div class="potpick">
+        <h4>${pi===0?'Main pot':'Side pot '+pi} <span>${pot.amount}</span></h4>
+        <div class="picks">${pot.eligible.map(seat=>
+          `<button class="pick ${pot.picked.includes(seat)?'sel':''}" onclick="togglePick(${pi},${seat})">${esc(S.players[seat].name)}</button>`
+        ).join('')}</div>
+      </div>`).join('')
+      + `<button class="act b-win full" ${pendingAward.every(p=>p.picked.length)?'':'disabled'} onclick="confirmAward()">Award ${S.pot}</button>`;
+    return;
+  }
+  if(S.phase==='handover'){
+    who.textContent='Hand complete';
+    need.textContent = S.lastWinners.map(i=>S.players[i].name).join(' & ');
+    btns.innerHTML=`<button class="act b-next full" onclick="dealNext()">Deal hand ${S.hand+1}</button>`;
+    return;
+  }
+
+  // betting — phrased so the operator can read it straight to the table.
+  const p=S.players[S.turn];
+  const toCall=Math.max(0, S.currentBet-p.roundBet);
+  who.textContent = p.name;
+  need.innerHTML = toCall
+    ? `<b>${Math.min(toCall,p.stack)}</b> to call · stack ${p.stack}`
+    : `check or bet · stack <b>${p.stack}</b>`;
+
+  const canRaise = p.stack > toCall && !(p.raiseLocked && p.stack > toCall + minRaiseSize()) ;
+  const raiseLabel = S.currentBet===0 ? 'Bet' : 'Raise';
+  const shove = p.stack <= toCall;
+  btns.innerHTML = `
+    <button class="act b-fold" onclick="act('fold')">Fold</button>
+    ${toCall===0
+      ? `<button class="act b-call" onclick="act('check')">Check</button>`
+      : `<button class="act b-call" onclick="act('call')">${shove?'Call all in':'Call'}<small>${Math.min(toCall,p.stack)}</small></button>`}
+    ${p.stack>toCall
+      ? `<button class="act b-raise" onclick="toggleRaiser()">${raiseLabel}<small>${p.raiseLocked?'all in only':'min '+Math.min(p.roundBet+p.stack, S.currentBet+minRaiseSize())}</small></button>`
+      : `<button class="act" disabled>${raiseLabel}</button>`}`;
+
+  if(raiseOpen) buildRaiser(p, toCall);
+  renderKeys();
+}
+
+function renderKeys(){
+  const k=$('keys'); if(!k) return;
+  if(S.phase==='bet'){
+    k.innerHTML = `<span><kbd>F</kbd>fold</span><span><kbd>C</kbd>${S.currentBet-S.players[S.turn].roundBet>0?'call':'check'}</span>
+      <span><kbd>0–9</kbd>raise to…</span><span><kbd>A</kbd>all in</span><span><kbd>U</kbd>undo</span>`;
+  } else if(S.phase==='street'||S.phase==='handover'||(S.phase==='award'&&!pendingAward)){
+    k.innerHTML = `<span><kbd>↵</kbd>continue</span><span><kbd>U</kbd>undo</span>`;
+  } else k.innerHTML='';
+}
+
+function toggleRaiser(){ raiseOpen=!raiseOpen; render(); }
+function closeRaiser(){ raiseOpen=false; $('raiser').classList.remove('on'); }
+
+function buildRaiser(p, toCall){
+  const max = p.roundBet + p.stack;                       // all-in total for this street
+  const min = Math.min(max, S.currentBet + minRaiseSize());
+  const lo  = p.raiseLocked ? max : min;                  // short-all-in lock: shove or nothing
+  const sl=$('rslider'), amt=$('ramt');
+  sl.min=lo; sl.max=max; sl.step=1;
+  if(!raiseOpenInit || +amt.value<lo || +amt.value>max){ amt.value=lo; sl.value=lo; }
+  raiseOpenInit=true;
+  $('raiser').classList.add('on');
+  const potNow = S.pot + toCall;                          // pot after we call
+  const frac = f => clamp(Math.round(S.currentBet + toCall + potNow*f), lo, max);
+  $('quick').innerHTML = [
+    ['Min', lo],
+    ['½ pot', frac(.5)],
+    ['¾ pot', frac(.75)],
+    ['Pot', frac(1)],
+    ['All in', max],
+  ].map(([l,v])=>`<button onclick="setAmt(${v})">${l}<br><span style="font-family:var(--mono);color:var(--dim)">${v}</span></button>`).join('');
+}
+let raiseOpenInit=false;
+function setAmt(v){ $('ramt').value=v; $('rslider').value=v; }
+function syncSlider(){ $('rslider').value=$('ramt').value; }
+function syncAmt(){ $('ramt').value=$('rslider').value; }
+function confirmRaise(){ raiseOpenInit=false; raiseTo(Math.floor(+$('ramt').value)); }
+
+function renderLedger(){
+  const {nets, pay}=settlement();
+  $('ledgerBody').innerHTML = S.players.map((p,i)=>{
+    const n=nets[i].net;
+    return `<tr><td style="font-family:var(--ui)">${esc(p.name)}</td>
+      <td class="n">${p.buyIn}</td><td class="n">${p.stack+p.pending}</td>
+      <td class="n ${n>0?'pos':(n<0?'neg':'')}">${n>0?'+':''}${n}</td></tr>`;
+  }).join('');
+  $('settle').innerHTML = pay.length ? pay.map(x=>`<div>${esc(x)}</div>`).join('')
+    : `<div style="color:var(--muted);font-family:var(--ui)">Everyone is square.</div>`;
+  $('buyins').innerHTML = S.players.map((p,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <div style="flex:1;font-weight:600">${esc(p.name)}</div>
+      <input class="f" id="bi-${i}" type="number" min="1" placeholder="amount" style="max-width:120px">
+      <button class="pick" onclick="rebuy(${i})">Add</button>
+    </div>`).join('');
+}
+
+/* ============================== SHEETS / KEYS ============================== */
+function openSheet(n){
+  $('f-ante').value=S.ante;
+  $('scrim').classList.add('on'); $('sheet-'+n).classList.add('on');
+}
+function closeSheet(){
+  $('scrim').classList.remove('on');
+  document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'));
+}
+document.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  const inField = e.target.tagName==='INPUT';
+
+  // In the raise amount field: Enter confirms, Esc cancels. Everything else types normally.
+  if(inField){
+    if(e.target.id==='ramt'){
+      if(k==='enter'){ e.preventDefault(); confirmRaise(); }
+      if(k==='escape'){ e.preventDefault(); closeRaiser(); render(); }
+    }
+    return;
+  }
+  if(k==='u'){ undo(); return; }
+  if(k==='escape' && raiseOpen){ closeRaiser(); render(); return; }
+
+  // Between hands / streets: Enter or Space presses the single primary button.
+  if(S.phase==='street' && (k==='enter'||k===' ')){ e.preventDefault(); nextStreet(); return; }
+  if(S.phase==='handover' && (k==='enter'||k===' ')){ e.preventDefault(); dealNext(); return; }
+  if(S.phase==='gameover' && (k==='enter'||k===' ') && S.players.filter(p=>p.stack>0||p.pending>0).length>=2){ e.preventDefault(); dealNext(); return; }
+  if(S.phase==='award' && !pendingAward && (k==='enter'||k===' ')){ e.preventDefault(); openAward(); return; }
+
+  if(S.phase!=='bet') return;
+  const p=S.players[S.turn]; if(!p) return;
+  const toCall=Math.max(0,S.currentBet-p.roundBet);
+  if(k==='f'){ act('fold'); return; }
+  if(k==='c' || k==='enter' || k===' '){ e.preventDefault(); act(toCall?'call':'check'); return; }
+  if(k==='a'){ raiseAllIn(); return; }
+  if(k==='r'){ toggleRaiser(); focusRaise(); return; }
+  // Typing a digit opens the raise box and starts the amount with that digit.
+  if(/^[0-9]$/.test(k) && p.stack > toCall){
+    raiseOpen=true; render();
+    const amt=$('ramt'); amt.value=k; syncSlider(); focusRaise(true);
+    e.preventDefault();
+  }
+});
+function focusRaise(keep){ requestAnimationFrame(()=>{ const a=$('ramt'); a.focus(); if(!keep) a.select(); }); }
+function raiseAllIn(){
+  const p=S.players[S.turn]; if(S.phase!=='bet'||!canAct(p)) return;
+  const toCall=Math.max(0,S.currentBet-p.roundBet);
+  if(p.stack<=toCall){ act('call'); return; }   // covering call = call all in
+  raiseTo(p.roundBet+p.stack);
+}
+// Keep the screen awake at the table. Mobile browsers require a user gesture,
+// and the lock is released whenever the tab is hidden — so re-arm on both.
+function armWakeLock(){ if('wakeLock' in navigator){ navigator.wakeLock.request('screen').catch(()=>{}); } }
+document.addEventListener('pointerdown', armWakeLock, {once:true});
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) armWakeLock(); });
+armWakeLock();
+
+/* ============================== BOOT ============================== */
+if(!load() || !S || !S.players || !S.players.length){ newGame(); }
+else if(!Number.isFinite(S.ante)){ wipe(); newGame(); }   // old blind-based save — start fresh
+else { S.history=S.history||[]; S.log=S.log||[]; S.lastWinners=S.lastWinners||[]; render(); }
+</script>
+</body>
+</html>
