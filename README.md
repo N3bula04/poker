@@ -8,6 +8,6 @@ Set players and stacks, then track antes, bets and pots as you play. Everything 
 
 ## Run it locally
 
-Clone this repository (or download `index.html`) and open `index.html` in a browser. Or serve the folder with `python3 -m http.server 8080` and visit [http://127.0.0.1:8080/](http://127.0.0.1:8080/).
+Clone this repository (or download `index.html` and `pot.js` into the same folder) and open `index.html` in a browser. Or serve the folder with `python3 -m http.server 8080` and visit [http://127.0.0.1:8080/](http://127.0.0.1:8080/).
 
 Personal project — use and copy it freely. No warranty.

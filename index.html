@@ -282,6 +282,7 @@
   </div>
 </div>
 
+<script src="pot.js"></script>
 <script>
 /* ============================== STATE ============================== */
 const STREETS = ["Pre-flop","Flop","Turn","River","Showdown"];
@@ -461,31 +462,22 @@ function nextStreet(){
 
 /* ============================== POTS ============================== */
 function sidePots(){
-  const levels=[...new Set(S.players.map(p=>p.totalBet).filter(x=>x>0))].sort((a,b)=>a-b);
-  const pots=[]; let prev=0;
-  for(const lv of levels){
-    const contrib = S.players.map((p,i)=>p.totalBet>=lv?i:-1).filter(i=>i>=0);
-    const amount = (lv-prev)*contrib.length;
-    const eligible = contrib.filter(i=>!S.players[i].folded);
-    if(amount>0) pots.push({amount, contrib, eligible, level:lv});
-    prev=lv;
-  }
-  return pots;
+  return ChiplessPots.computePots(S.players);
 }
 
-// BUG FIX 3: a layer with no live contender is dead money that was never called.
-// Refund it to whoever put it in instead of deadlocking the award.
 function refundUncontested(pots){
-  const live=[];
-  for(const pot of pots){
-    if(pot.eligible.length===0){
-      const share = pot.amount / pot.contrib.length;
-      pot.contrib.forEach(i=>{ S.players[i].stack += share; S.players[i].totalBet -= share; });
-      S.pot -= pot.amount;
-      log(`Uncalled ${pot.amount} returned.`);
-    } else live.push(pot);
+  const {awardable, refunds} = ChiplessPots.settlePots(pots);
+  for(const refund of refunds){
+    let returned = 0;
+    for(const {seat, amount} of refund){
+      S.players[seat].stack += amount;
+      S.players[seat].totalBet -= amount;
+      returned += amount;
+    }
+    S.pot -= returned;
+    log(`Uncalled ${returned} returned.`);
   }
-  return live;
+  return awardable;
 }
 
 function finishHand(){
@@ -505,7 +497,7 @@ function finishHand(){
 function openAward(){
   const pots = refundUncontested(sidePots());
   pendingAward = pots.map(p=>({...p, picked:[]}));
-  if(!pendingAward.length){ S.pot=0; S.phase='handover'; render(); return; }
+  if(!pendingAward.length){ pendingAward=null; S.phase='handover'; render(); save(); return; }
   render();
 }
 function togglePick(pi, seat){
@@ -519,12 +511,10 @@ function confirmAward(){
   const winners=new Set();
   pendingAward.forEach((pot,n)=>{
     const w=pot.picked;
-    const share=Math.floor(pot.amount/w.length);
-    let rem=pot.amount - share*w.length;
-    w.forEach(i=>{ S.players[i].stack+=share; winners.add(i); });
-    // Odd chips go to the first winner clockwise from the dealer.
-    const order=[]; for(let k=1;k<=S.players.length;k++){ const i=(S.dealer+k)%S.players.length; if(w.includes(i)) order.push(i); }
-    for(let r=0;r<rem;r++) S.players[order[r%order.length]].stack++;
+    for(const [seat, amount] of ChiplessPots.splitPayout(pot.amount, w, S.dealer, S.players.length)){
+      S.players[seat].stack += amount;
+      winners.add(seat);
+    }
     log(`${w.map(i=>S.players[i].name).join(' & ')} won ${pot.amount}${n>0?` (side pot ${n})`:''}${w.length>1?', split':''}.`);
   });
   S.pot=0; S.players.forEach(p=>p.totalBet=0);

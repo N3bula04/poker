@@ -1,0 +1,11 @@
+{
+  "name": "chipless",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.js",
+    "test:ui": "node --test test/*.cjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1"
+  }
+}
